@@ -1,0 +1,196 @@
+---
+title: "Simulations"
+author: "Isaac Martín"
+date: "2024-11-05"
+output: html_document
+---
+
+# Simulation of race results
+
+```{r librerías, warning=FALSE, message=FALSE}
+library(dplyr)
+library(lubridate)
+library(plotly)
+```
+
+Reading and transforming the data of the 1500m finalists at the Paris 2024 Olympic Games. In addition, we keep only the data from the finals. In this way we ‘better’ simulate the race we are interested in. The performance of a runner in ‘non-finals’ does not have to match his performance in finals.
+
+```{r datos}
+  JJOO_finalist_data_t_12 <- read.csv("~/data/DSLAB/Proyectos/SPORTS_ANALYTICS/RACES/JJOO_finalist_data_t_12.csv")
+sim1 = JJOO_finalist_data_t_12
+sim1 = sim1 %>% 
+           mutate(mark_s = minute(ms(sim1$mark)) + second(ms(sim1$mark))/60)
+sim_f = sim1[sim1$race=="F",]
+head(sim_f)
+```
+
+The mean and sd of the times for the athletes involved are shown.
+
+```{r eda1}
+sim2 =sim_f %>%
+              group_by(Name) %>%
+              summarise(mean = mean(mark_s),sd=sqrt(var(mark_s)),min=min(mark_s))
+sim2
+```
+
+And drawing its density with the observed data.
+
+```{r den1}
+p=ggplot(sim_f,aes(mark_s,col=Name))+geom_density()
+library(plotly)
+ggplotly(p)
+
+```
+
+In the following section the running times for each runner are simulated assuming a Gamma distribution.
+
+```{r sim1}
+# parámetros de una gamma
+alpha=sim2$mean^2/sim2$sd^2
+beta=sim2$sd^2/sim2$mean
+```
+
+Create a function for the simulation.
+
+```{r sim2}
+simula_class = function(N=100,class=matrix(0,N,12),alpha,beta,p){
+  for (i in 1:N){
+  res1=c(0,12)
+  for (j in 1:12){
+    res1[j]=rnorm(1,sim2[j,]$mean,sim2[j,]$sd)
+    a=rgamma(1,alpha[j],scale=beta[j])
+    while(a<sim2$min[j]*p){
+      a=rgamma(1,alpha[j],scale=beta[j])
+    }
+    res1[j]=a
+  }
+  
+  class[i,]=sort(res1,index.return=TRUE)$ix
+}
+return(class=class)
+}
+
+```
+
+The previous function is used to simulate.
+
+```{r sim3}
+class=simula_class(N=10000,alpha=alpha,beta=beta,p=1)
+head(class)
+```
+
+For athletes, the probabilities of 1st, 2nd and 3rd are calculated:
+
+```{r prob1}
+N=dim(class)[1]
+prob1=round(100*table(class[,1])/N,2)
+filas=as.numeric(names(prob1))
+prob_vic=c(0,12)
+prob_vic[filas]=prob1
+
+prob1=round(100*table(class[,2])/N,2)
+filas=as.numeric(names(prob1))
+prob_2=c(0,12)
+prob_2[filas]=prob1
+
+prob1=round(100*table(class[,3])/N,2)
+filas=as.numeric(names(prob1))
+prob_3=c(0,12)
+prob_3[filas]=prob1
+prob_pod=as.data.frame(cbind(prob_vic,prob_2,prob_3))
+prob_pod=prob_pod %>% 
+  rowwise() %>% 
+  mutate(prob_pod = sum(prob_vic, prob_2,prob_3, na.rm = TRUE))
+
+prob1=cbind(sim2,Prob_VIC=as.vector(prob_vic),Prob_POD=as.vector(prob_pod$prob_pod))
+prob1=as.data.frame(prob1)
+prob_final=prob1[order(prob1$Prob_VIC,decreasing=TRUE),]
+prob_final
+```
+
+It is possible to face questions such as: What is the probability that a runner, Kerr, will be ahead of another, "Ingebrigtsen"?
+
+```{r question1}
+prob_Kerr_Ingebrigtsen=100*sum(which(class[1:N,]==5)<which(class[1:N,]==4))/N
+prob_Kerr_Ingebrigtsen
+```
+
+The exercise is repeated with $p=1.01$ so that the slow runs of each runner are eliminated.
+
+```{r sim4}
+class=simula_class(N=10000,alpha=alpha,beta=beta,p=1.01)
+head(class)
+```
+
+Once again, the probabilities of 1st, 2nd and 3rd are calculated:
+
+```{r prob2}
+N=dim(class)[1]
+prob1=round(100*table(class[,1])/N,2)
+filas=as.numeric(names(prob1))
+prob_vic=c(0,12)
+prob_vic[filas]=prob1
+
+prob1=round(100*table(class[,2])/N,2)
+filas=as.numeric(names(prob1))
+prob_2=c(0,12)
+prob_2[filas]=prob1
+
+prob1=round(100*table(class[,3])/N,2)
+filas=as.numeric(names(prob1))
+prob_3=c(0,12)
+prob_3[filas]=prob1
+prob_pod=as.data.frame(cbind(prob_vic,prob_2,prob_3))
+prob_pod=prob_pod %>% 
+  rowwise() %>% 
+  mutate(prob_pod = sum(prob_vic, prob_2,prob_3, na.rm = TRUE))
+
+prob1=cbind(sim2,Prob_VIC=as.vector(prob_vic),Prob_POD=as.vector(prob_pod$prob_pod))
+prob1=as.data.frame(prob1)
+
+prob_rapido=prob1[order(prob1$Prob_VIC,decreasing=TRUE),]
+prob_rapido
+```
+
+The results are plotted.
+
+```{r graf1}
+datos=merge(prob_final,prob_rapido,by="Name")
+datos=datos[,-c(2,3,4,7,8,9)]
+colnames(datos)=c("Name","Vic_final","Pod_final","Vic_rapida","Pod_rapida")
+datos[is.na(datos)]=0
+datos=datos[order(datos$Vic_final,decreasing=TRUE),]
+rownames(datos)=seq(1:12)
+
+datos$Name=as.factor(datos$Name)
+datos$Name <- factor(datos$Name, levels = (datos$Name)[order(datos$Vic_final, decreasing = TRUE)])
+
+fig <- plot_ly(datos, x = ~Name, y = ~Vic_final, type = 'bar', name = 'Nomal paced')
+fig <- fig %>% add_trace(y = ~Vic_rapida, name = 'Fast paced')
+fig <- fig %>% layout(yaxis = list(title = 'Probability'), barmode = 'group',xaxis=list(title = ' '))
+fig <- fig %>% layout(title = list(text='Golden probabilities for the finalists',y=.975))
+
+fig
+```
+
+The graph reflects the odds of winning the race for each rider in two different scenarios: when the race is fast and in a normal scenario.
+
+```{r podium}
+datos$Name=as.factor(datos$Name)
+datos$Name <- factor(datos$Name, levels = (datos$Name)[order(datos$Pod_final, decreasing = TRUE)])
+
+fig <- plot_ly(datos, x = ~Name, y = ~Pod_final, type = 'bar', name = 'Nomal paced')
+fig <- fig %>% add_trace(y = ~Pod_rapida, name = 'Fast paced')
+fig <- fig %>% layout(yaxis = list(title = 'Probability'), barmode = 'group',xaxis=list(title = ' '))
+fig <- fig %>% layout(title = list(text='Podium probabilities for the finalists',y=.975))
+
+fig
+```
+
+The graph reflects the podium probabilities (finishing the race in the top three) for each rider in two different scenarios: when the race is fast and in a normal scenario.
+
+------------------------------------------------------------------------
+
+<p style="text-align: right;">Isaac</p>
+
+<p style="text-align: right;">![](images/DSLab_logo_2.png){width="10%"}</p>

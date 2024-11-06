@@ -1,0 +1,185 @@
+---
+title: "Event Highligts"
+author: "Isaac Martín"
+date: "2024-11-05"
+output: html_document
+---
+
+# Highlights
+
+The idea is to identify and represent the most important points of a road.
+
+```{r librerías, warning=FALSE, message=FALSE}
+library(dplyr)
+library(lubridate)
+library(plotly)
+library(ggforce)
+library(ggnewscale)
+```
+
+First, we read and transform the data from the 1500m final at the Paris 2024 Olympic Games.
+
+```{r datos, warning=FALSE, message=FALSE}
+JJOO_final_1500_men <- read.csv("~/data/DSLAB/SportsAnalytics/Proyecto_R/JJOO_final_1500_men.csv")  
+datos=JJOO_final_1500_men
+merged_data=datos
+
+plot_ly(data = merged_data, 
+        x = ~number, 
+        y = ~position, 
+        type = 'scatter', 
+        mode = 'lines+markers',
+        color = ~name,  # Use name for the legend
+        text = ~paste("Athlete:", name, "<br>Position:", position),
+        hoverinfo = "text") 
+
+```
+
+We calculate in which splits the number of position changes is higher.
+
+```{r cruces}
+cruce=rep(0,14)
+cruces=rep(0,3)
+for (h in 2:15){
+  a=sort(datos[datos$number==h-1,]$position,index.return=TRUE)
+  sort2=datos[datos$number==h,]$position[a$ix]
+  sort1=a$x
+cambio_pos=sort1-sort2
+ for (i in 1:11){
+   for (j in i:12)
+   {
+     if (cambio_pos[i]!=cambio_pos[j]){
+       x=(2*(sort1[j]-sort1[i])+
+         (sort2[i]-sort2[j]))/(-cambio_pos[i]+cambio_pos[j])
+        if (x<=2 & x>=1){
+           cruce[h-1]=cruce[h-1]+1
+           cruces=rbind(cruces,c(h,i,j))
+        }
+     }
+   }
+ }
+}
+cambio_mayor=which.max(cruce)+1
+
+```
+
+Here the situation will be visualised in the split where the changes are greater.
+
+```{r sim1, warning=FALSE, message=FALSE}
+pos2=datos[datos$number==h,]$position
+pos1=datos[datos$number==h-1,]$position
+velocidad_1=datos[datos$number==h-1,]$velocity
+velocidad_2=datos[datos$number==h,]$velocity
+
+
+posiciones=matrix(datos[datos$number==1:15,]$position,ncol=12,nrow=15)
+tamaño=rep(0,12)
+for (i in 1:12){
+  z=which(posiciones[1:(h-1),i]!=posiciones[(h-1),i])
+  if (length(z)>0)
+    tamaño[i]=h-max(z)-1
+  else
+    tamaño[i]=h-1
+}
+
+tiempos=rep(0,12)
+for (i in 1:h){
+  tiempos=tiempos+datos[datos$number==i,]$time
+}
+a_unique <- tiempos  # Creamos una copia del vector original
+
+# Identificamos valores duplicados y les agregamos un error aleatorio
+a_unique[duplicated(tiempos) | duplicated(tiempos, fromLast = TRUE)] <- 
+  tiempos[duplicated(tiempos) | duplicated(tiempos, fromLast = TRUE)] + runif(sum(duplicated(tiempos) | duplicated(tiempos, fromLast = TRUE)), min = -0.1, max = 0.1)
+
+tiempos=a_unique
+diff_tiempos=tiempos-min(tiempos)
+final=data.frame(cbind(Name=datos[datos$number==h,]$name,pos1=as.numeric(pos1),pos2=as.numeric(pos2),
+      vel1=as.numeric(velocidad_1),vel2=as.numeric(velocidad_2),tiempos=tiempos,diff_tiempos=-round(diff_tiempos,3),tamaño=tamaño))
+
+a=sort(pos2,index.return=TRUE)
+lab2=(final$Name)[a$ix]
+
+final$vel2=as.numeric(velocidad_2)
+final$diff_tiempos= -as.numeric(diff_tiempos)
+names(final)[5]="Speed"
+
+```
+
+```{r sim2, warning=FALSE, message=FALSE}
+p = ggplot(final,aes(diff_tiempos,as.numeric(pos2),colour=Speed))
+p = p+
+    ggtitle(paste0(100*(h-1),"-->",h*100)) +
+    xlab("Mark") + ylab("Position")
+
+# La pista
+for (i in 1:12)
+  p= p+
+    geom_hline(yintercept = i,col="#e5c4c0",lwd=10)
+
+p = p+   
+    scale_y_reverse(breaks = seq(12, 1, -1),labels = seq(12,1,by=-1),
+        sec.axis = sec_axis(trans =  ~., breaks = seq(1, 12,1),labels = lab2)) 
+
+# El mejor tiempo
+lab3=seq(round(max(diff_tiempos),0),0,by=-2)
+lab4=lab3
+n=length(lab3)
+lab3[n]=min(tiempos)
+a1=floor(lab3[n]/60)
+a2=floor(lab3[n]-a1*60)
+a3=100*(lab3[n]-floor(lab3[n]))
+ganador=paste0(a1,":",a2,":",round(a3,2))
+if (a2<10)
+  ganador=paste0(a1,":0",a2,":",round(a3,2))
+lab3[n]=ganador               
+lab3[1:(n-1)]=paste0("+",lab3[1:(n-1)])
+
+p=p+   scale_x_continuous(breaks =-lab4,labels = lab3 )
+
+# La aceleración
+z= as.numeric(diff_tiempos)
+colores=rep("#82cd86",12)
+colores[sign(velocidad_2-velocidad_1)==-1]="#c2737a"
+lines <- data.frame(
+  x = -z,
+  y = as.numeric(pos1),
+  xend = -z,
+  yend = as.numeric(pos2),
+  signo=sign(pos1-pos2),
+  colores=colores
+)
+
+
+lines=lines[lines$y!=lines$yend,]
+
+p = p+
+    geom_segment(data=lines,aes(x = x, y = y, xend = xend, yend = yend+.3*signo),colour=lines$colores,size=1.5,arrow = arrow(length = unit(0.3, "cm")))
+
+
+p = p+
+    geom_point(size=8,colour=colores)+
+    new_scale_color() +
+    geom_point(size=6,aes(color = Speed))+
+    scale_color_gradient(low = "steelblue", high = "gold") +
+    theme_bw()+
+    theme(legend.position = c(.07,.75))+ theme(
+    # Hide panel borders and remove grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Change axis line
+    axis.line = element_line(colour = "black")
+   )
+    
+p
+
+
+```
+
+This figure shows the marks on the split where most positional swaps occurred. On the x-axis you can see the time of the first place finisher in the split and the time increment of the rest of the runners. On the x-axis the runners are ordered according to their position at the end of the split. The colour of each point corresponds to the speed in metres per second during the split. The colour of the arrows and of the circumference surrounding the points corresponds to the acceleration with respect to the previous split, being green if the acceleration is positive and red otherwise.
+
+------------------------------------------------------------------------
+<p style='text-align: right;'> Isaac </p>
+<p style='text-align: right;'> ![](images/DSLab_logo_2.png){width="10%"} </p>
+
+
