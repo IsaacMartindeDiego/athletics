@@ -16,7 +16,7 @@ library(plotly)
 Reading and transforming the data of the 1500m finalists at the Paris 2024 Olympic Games. In addition, we keep only the data from the finals. In this way we ‘better’ simulate the race we are interested in. The performance of a runner in ‘non-finals’ does not have to match his performance in finals.
 
 ```{r datos}
-  JJOO_finalist_data_t_12 <- read.csv("~/data/DSLAB/Proyectos/SPORTS_ANALYTICS/RACES/JJOO_finalist_data_t_12.csv")
+  JJOO_finalist_data_t_12 <- read.csv("./JJOO_finalist_data_t_12.csv")
 sim1 = JJOO_finalist_data_t_12
 sim1 = sim1 %>% 
            mutate(mark_s = minute(ms(sim1$mark)) + second(ms(sim1$mark))/60)
@@ -193,4 +193,4 @@ The graph reflects the podium probabilities (finishing the race in the top three
 
 <p style="text-align: right;">Isaac</p>
 
-<p style="text-align: right;">![](images/DSLab_logo_2.png){width="10%"}</p>
+<p style="text-align: right;">![](DSLab_logo_2.png){width="10%"}</p>

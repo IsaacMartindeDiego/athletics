@@ -20,7 +20,7 @@ library(ggnewscale)
 First, we read and transform the data from the 1500m final at the Paris 2024 Olympic Games.
 
 ```{r datos, warning=FALSE, message=FALSE}
-JJOO_final_1500_men <- read.csv("~/data/DSLAB/SportsAnalytics/Proyecto_R/JJOO_final_1500_men.csv")  
+JJOO_final_1500_men <- read.csv("./JJOO_final_1500_men.csv")  
 datos=JJOO_final_1500_men
 merged_data=datos
 
@@ -180,6 +180,6 @@ This figure shows the marks on the split where most positional swaps occurred. O
 
 ------------------------------------------------------------------------
 <p style='text-align: right;'> Isaac </p>
-<p style='text-align: right;'> ![](images/DSLab_logo_2.png){width="10%"} </p>
+<p style='text-align: right;'> ![](DSLab_logo_2.png){width="10%"} </p>
 
 
